@@ -10,11 +10,15 @@ import { requestShowDownloadManager } from './download-manager';
 import { Icon } from './icon';
 import { SearchHistoryDropdown, useSearchHistory } from './search-history';
 import { cn } from '@/lib/utils';
+import { useIsDesktop } from '@/lib/use-platform';
+import { useAuth } from './auth';
 
 /** 顶部导航：Logo、搜索框（首页外）、历史、设置 */
 export function Header({ showSearch = false }: { showSearch?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isDesktop = useIsDesktop();
+  const { account, openLogin } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<{ primary: 'prefs'; secondary: 'background' } | undefined>();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -97,19 +101,40 @@ export function Header({ showSearch = false }: { showSearch?: boolean }) {
           <div className="flex-1 sm:hidden" />
 
           <nav className="flex items-center gap-1 ml-auto">
-            <HeaderLink href="/live" active={pathname === '/live'}>
-              直播
-            </HeaderLink>
-            <HeaderLink href="/about" active={pathname === '/about'}>
-              关于
-            </HeaderLink>
+            {/* 直播为桌面应用专属功能：网页端（公网部署）隐藏入口，桌面 Electron 端正常显示 */}
+            {isDesktop === true && (
+              <HeaderLink href="/live" active={pathname === '/live'}>
+                直播
+              </HeaderLink>
+            )}
+            {/* 关于/下载管理为桌面应用专属：网页端（公网部署）隐藏入口，桌面 Electron 端正常显示 */}
+            {isDesktop === true && (
+              <HeaderLink href="/about" active={pathname === '/about'}>
+                关于
+              </HeaderLink>
+            )}
+            {/* 登录 / 当前账号：已登录显示加密手机号，游客模式显示「游客」 */}
+            <button
+              type="button"
+              onClick={openLogin}
+              className="px-2.5 py-1.5 rounded-md text-sm text-muted hover:text-content hover:bg-hover transition-colors"
+              title={account.loggedIn ? '账号与切换' : '游客模式，点击登录'}
+            >
+              {account.loggedIn
+                ? account.phone && account.phone.length >= 7
+                  ? `${account.phone.slice(0, 3)}****${account.phone.slice(-4)}`
+                  : account.phone
+                : '游客'}
+            </button>
             <ThemeToggle />
             <IconButton label="观看历史" onClick={() => setHistoryOpen(true)}>
               <Icon name="clock" />
             </IconButton>
-            <IconButton label="下载管理" onClick={requestShowDownloadManager}>
-              <Icon name="download" />
-            </IconButton>
+            {isDesktop === true && (
+              <IconButton label="下载管理" onClick={requestShowDownloadManager}>
+                <Icon name="download" />
+              </IconButton>
+            )}
             <IconButton label="设置" onClick={() => setSettingsOpen(true)}>
               <Icon name="gear" />
             </IconButton>
@@ -147,7 +172,7 @@ function HeaderLink({ href, active, children }: { href: string; active: boolean;
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      className="p-2 rounded-md text-muted hover:text-content hover:bg-hover transition-colors"
+      className="p-3 rounded-md text-muted hover:text-content hover:bg-hover transition-colors [&_svg]:h-6 [&_svg]:w-6"
       title={label}
       aria-label={label}
       onClick={onClick}

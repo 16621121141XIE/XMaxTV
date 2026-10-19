@@ -196,7 +196,7 @@ export function DetailModal({ item, onClose }: { item: SearchResultItem | null; 
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2">
                       <button
-                        className="btn-ghost btn-sm"
+                        className="btn-ghost !px-3 !py-1.5 text-sm"
                         onClick={() => setReversed((v) => !v)}
                         aria-label={reversed ? '切换为正序排列' : '切换为倒序排列'}
                         title="调整剧集列表的排列顺序"
@@ -209,17 +209,17 @@ export function DetailModal({ item, onClose }: { item: SearchResultItem | null; 
                       </button>
                       <span className="text-sm text-faint">共 {episodes.length} 集</span>
                     </div>
-                    <button className="btn-primary btn-sm" onClick={copyLinks}>
+                    <button className="btn-primary !px-3 !py-1.5 text-sm" onClick={copyLinks}>
                       复制链接
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 gap-2 max-h-[40vh] overflow-y-auto scrollbar-thin pr-1">
+                  <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2 max-h-[40vh] overflow-y-auto scrollbar-thin pr-1">
                     {episodes.map((_, i) => {
                       const realIndex = reversed ? detail.episodes.length - 1 - i : i;
                       return (
                         <button
                           key={realIndex}
-                          className="btn-ghost btn-sm !px-1 text-center"
+                          className="btn-ghost !px-1 !py-1.5 text-sm text-center"
                           onClick={() => play(realIndex)}
                         >
                           {realIndex + 1}

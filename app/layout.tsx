@@ -27,6 +27,11 @@ export const viewport: Viewport = {
   themeColor: '#0b101a',
   width: 'device-width',
   initialScale: 1,
+  // iOS Safari 输入框聚焦/双击时的自动缩放会放大页面且不自动还原；
+  // 固定缩放比例禁止页面整体缩放（移动端 UI 已做响应式适配，不依赖缩放）。
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -66,7 +66,7 @@ function DoubanView({ onPick }: { onPick: (title: string) => void }) {
           <button
             key={t}
             className={cn(
-              'px-2.5 py-1 rounded-full text-xs transition-colors',
+              'px-3.5 py-1.5 rounded-full text-sm transition-colors',
               t === tag ? 'bg-accent text-on-accent' : 'bg-chip text-muted hover:text-content hover:bg-hover'
             )}
             onClick={() => setTag(t)}
@@ -159,7 +159,8 @@ function HotListView({ onPick }: { onPick: (title: string) => void }) {
 
   return (
     <section aria-label="影视榜单推荐">
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      {/* 移动端每行最多 3 个标签，桌面端 flex 自适应换行 */}
+      <div className="grid grid-cols-3 gap-2 mb-4 md:flex md:flex-wrap md:gap-1.5">
         {HOT_LISTS.map((l) => (
           <ChipButton key={l.id} active={listId === l.id} onClick={() => setListId(l.id)}>
             {l.label}
@@ -199,7 +200,7 @@ function ChipButton({ active, onClick, children }: { active: boolean; onClick: (
   return (
     <button
       className={cn(
-        'px-2.5 py-1 rounded-full text-xs transition-colors',
+        'px-3.5 py-1.5 rounded-full text-sm transition-colors',
         active ? 'bg-accent text-on-accent' : 'bg-chip text-muted hover:text-content hover:bg-hover'
       )}
       onClick={onClick}

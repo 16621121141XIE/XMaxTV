@@ -20,6 +20,8 @@ import { LiveChannelList, type LiveChannelItem } from '@/components/live-channel
 import { LiveEpgPanel } from '@/components/live-epg-panel';
 import { Spinner } from '@/components/states';
 import { useAuth } from '@/components/auth';
+import { useIsDesktop } from '@/lib/use-platform';
+import Link from 'next/link';
 import { allLiveSources, useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { SmartImage } from '@/components/smart-image';
@@ -202,6 +204,27 @@ function LiveContent() {
     },
     [selectChannel]
   );
+
+  const isDesktop = useIsDesktop();
+
+  // 直播为桌面应用专属功能：网页端（公网部署）直接访问时给出明确提示；
+  // 用 === false 判定，SSR 未判定（null）阶段正常渲染，桌面端不出现首帧闪烁
+  if (isDesktop === false) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="text-center max-w-md">
+            <p className="text-content font-medium mb-2">直播功能仅限 XMaxTV 桌面版使用</p>
+            <p className="text-sm text-muted mb-4">
+              请使用 Windows 桌面应用体验直播功能，或返回首页继续观看点播内容。
+            </p>
+            <Link href="/" className="btn-primary">返回首页</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!verified) {
     return (

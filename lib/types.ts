@@ -90,11 +90,29 @@ export interface BangumiCalendarResponse {
   days: BangumiCalendarDay[];
 }
 
+/** 三端互通账号与授权状态 */
+export interface AccountStatus {
+  loggedIn: boolean;
+  phone?: string;
+  /** 是否已用推广授权码激活 */
+  activated?: boolean;
+  /** 已激活但已过期 */
+  expired?: boolean;
+  /** 剩余授权天数 */
+  remainingDays?: number;
+  /** 授权到期时间戳（ms） */
+  expiresAt?: number;
+}
+
 export interface AuthStatusResponse {
   /** 服务器是否配置了 PASSWORD */
   passwordRequired: boolean;
   /** 当前会话是否已验证 */
   verified: boolean;
+  /** 三端互通账号状态 */
+  account: AccountStatus;
+  /** 商业模式开关：关闭=免费不校验（默认），开启=30 天倒计时校验 */
+  commercialMode: boolean;
   version: string;
   /** 部署者通过 DEFAULT_SOURCES 环境变量预置的采集站（未配置时为空数组） */
   defaultSources: SourceConfig[];

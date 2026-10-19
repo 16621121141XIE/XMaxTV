@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload } from './types';
+import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetail, DoubanResponse, BangumiCalendarResponse, AuthStatusResponse, AccountStatus, SourceConfig, SearchResultItem, LivePlaylistResponse, LiveEpgResponse, SourceListPayload } from './types';
 
 /**
  * 客户端 API 封装。401 时触发全局事件打开登录框，
@@ -113,6 +113,87 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
+    }),
+
+  /** 三端互通账号：注册 / 登录（手机号 + 密码），成功后写入会话 cookie */
+  accountLogin: (action: 'register' | 'login', phone: string, password: string) =>
+    request<{ success: boolean; status?: AccountStatus }>('/api/account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, phone, password }),
+    }),
+
+  /** 授权状态查询 */
+  licenseGet: () =>
+    request<{ success: boolean; loggedIn: boolean; phone?: string; status?: AccountStatus; licenseDays?: number; payAmount?: number }>('/api/license'),
+
+  /** 输入推广授权码，激活 30 天 */
+  licenseActivate: (code: string) =>
+    request<{ success: boolean; status?: AccountStatus }>('/api/license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'activate', code }),
+    }),
+
+  /** 输入动态激活码（密钥生成器生成），验证正确即续期 30 天（等同一次付款成功） */
+  licenseActivateByCode: (code: string) =>
+    request<{ success: boolean; status?: AccountStatus }>('/api/license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'code', code }),
+    }),
+
+  /** 付款确认后，续期 30 天（简单模式） */
+  licenseRenew: () =>
+    request<{ success: boolean; status?: AccountStatus }>('/api/license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'renew' }),
+    }),
+
+  /** —— 管理员（仅 16621121141 可用） —— */
+
+  /** 密钥列表（含已使用标注） */
+  adminKeys: () =>
+    request<{ success: boolean; keys?: { phone: string; code: string; status: string; createdAt: number; usedAt?: number }[] }>('/api/admin/keys'),
+
+  /** 签发密钥（按手机号） */
+  adminIssueKey: (phone: string) =>
+    request<{ success: boolean; code?: string; error?: string }>('/api/admin/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'issue', phone }),
+    }),
+
+  /** 白名单列表 */
+  adminWhitelist: () => request<{ success: boolean; whitelist?: string[] }>('/api/admin/whitelist'),
+
+  /** 录入白名单（对应用户 9999 天） */
+  adminWhitelistAdd: (phone: string) =>
+    request<{ success: boolean; whitelist?: string[] }>('/api/admin/whitelist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add', phone }),
+    }),
+
+  /** 移出白名单 */
+  adminWhitelistRemove: (phone: string) =>
+    request<{ success: boolean; whitelist?: string[] }>('/api/admin/whitelist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove', phone }),
+    }),
+
+  /** 全局设置（商业模式开关） */
+  adminSettings: () =>
+    request<{ success: boolean; settings?: { commercialMode: boolean } }>('/api/admin/settings'),
+
+  /** 设置商业模式开关（false=免费不校验，true=30 天倒计时校验） */
+  adminSettingsSetCommercial: (enabled: boolean) =>
+    request<{ success: boolean; settings?: { commercialMode: boolean } }>('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set-commercial', commercialMode: enabled }),
     }),
 
   logout: () => request<{ success: boolean }>('/api/auth', { method: 'DELETE' }),

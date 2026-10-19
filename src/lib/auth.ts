@@ -29,10 +29,10 @@ function hmac(payload: string): string {
   return crypto.createHmac('sha256', getSecret()).update(payload).digest('hex');
 }
 
-/** 生成签名会话 token：`<expiresAtMs>.<hmac>` */
-export function signSession(): { token: string; expiresAt: number } {
+/** 生成签名会话 token：`<expiresAtMs>[.<phone>].<hmac>`；登录后可携带手机号实现三端互通 */
+export function signSession(phone?: string): { token: string; expiresAt: number } {
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  const payload = String(expiresAt);
+  const payload = phone ? `${expiresAt}.${phone}` : String(expiresAt);
   return { token: `${payload}.${hmac(payload)}`, expiresAt };
 }
 
@@ -74,6 +74,29 @@ export function sessionFromCookieHeader(cookieHeader: string | null): boolean {
     }
   }
   return false;
+}
+
+/** 从请求 Cookie 中解析会话内的手机号（未登录或旧会话返回 null） */
+export function phoneFromCookieHeader(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(';');
+  for (const c of cookies) {
+    const eq = c.indexOf('=');
+    if (eq === -1) continue;
+    const name = c.slice(0, eq).trim();
+    if (name === SESSION_COOKIE) {
+      const token = decodeURIComponent(c.slice(eq + 1).trim());
+      if (!verifySession(token)) return null;
+      const dot = token.lastIndexOf('.');
+      if (dot <= 0) return null;
+      const payload = token.slice(0, dot);
+      const inner = payload.lastIndexOf('.');
+      if (inner <= 0) return null;
+      const phone = payload.slice(inner + 1);
+      return phone || null;
+    }
+  }
+  return null;
 }
 
 // —— 登录速率限制（内存实现，单实例部署足够；多实例可换 Redis） ——

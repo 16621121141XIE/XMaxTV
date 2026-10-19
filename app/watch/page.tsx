@@ -18,7 +18,9 @@ const PlayerShell = dynamic(() => import('@/components/player-shell').then((m) =
 import { EmptyState, LoadingState, Spinner } from '@/components/states';
 import { SwitchSourceModal } from '@/components/switch-source';
 import { enqueueDownload } from '@/components/download-manager';
+import { useIsDesktop } from '@/lib/use-platform';
 import { Icon } from '@/components/icon';
+import { useTheme } from '@/components/theme';
 import { useAuth } from '@/components/auth';
 import { resolveSource, useAppStore } from '@/lib/store';
 import {
@@ -49,6 +51,8 @@ function WatchContent() {
   const router = useRouter();
   const store = useAppStore();
   const { verified } = useAuth();
+  const { resolved, setTheme } = useTheme();
+  const isDesktop = useIsDesktop();
 
   const sourceKey = searchParams.get('source') || '';
   const vodId = searchParams.get('id') || '';
@@ -197,7 +201,7 @@ function WatchContent() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 h-14 flex items-center gap-2 sm:gap-3">
           <BackButton />
           <HomeButton />
           <div className="min-w-0">
@@ -209,7 +213,7 @@ function WatchContent() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
-              className="btn-ghost btn-sm"
+              className="btn-ghost !px-3 !py-1.5 text-sm"
               onClick={() => {
                 if (!currentUrl) return;
                 enqueueDownload({
@@ -224,7 +228,7 @@ function WatchContent() {
             >
               下载本集
             </button>
-            <button className="btn-ghost btn-sm" onClick={() => setSwitchOpen(true)}>
+            <button className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => setSwitchOpen(true)}>
               切换资源
             </button>
           </div>
@@ -281,28 +285,90 @@ function WatchContent() {
             {/* 操作栏 */}
             <div className="flex flex-wrap items-center gap-2 mt-3">
               <button
-                className="btn-ghost btn-sm"
+                className="btn-ghost !px-3 !py-1.5 text-sm"
                 disabled={currentIndex <= 0}
                 onClick={() => goEpisode(currentIndex - 1)}
               >
                 上一集
               </button>
               <button
-                className="btn-ghost btn-sm"
+                className="btn-ghost !px-3 !py-1.5 text-sm"
                 disabled={episodes.length === 0 || currentIndex >= episodes.length - 1}
                 onClick={() => goEpisode(currentIndex + 1)}
               >
                 下一集
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-muted ml-auto cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-[#2563eb]"
-                  checked={store.autoplayNext}
-                  onChange={(e) => store.updateSettings({ autoplayNext: e.target.checked })}
-                />
-                自动连播
-              </label>
+              {/* 主题切换（背景颜色）：网页端图标版，位置不变；灯泡图标 + 开灯/关灯逻辑与桌面端一致 */}
+              {isDesktop === false && (
+                <button
+                  className="flex items-center gap-1.5 text-sm text-muted hover:text-content transition-colors"
+                  title={resolved === 'dark' ? '当前为深色背景，点击切换为浅色' : '当前为浅色背景，点击切换为深色'}
+                  onClick={() => setTheme(resolved === 'dark' ? 'light' : 'dark')}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {resolved === 'dark' ? (
+                      <>
+                        <path d="M12 2.2c3.2 0 5.3 2.6 5.3 5.2 0 2.2-1.1 3.7-1.9 4.9-.7 1-1.4 1.8-1.4 3h-4c0-1.2-.7-2-1.4-3-.8-1.2-1.9-2.7-1.9-4.9 0-2.6 2.1-5.2 5.3-5.2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                        <path d="M8.7 6.1c.5-1.3 1.4-2.1 2.4-2.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity="0.75" />
+                        <path d="M8.8 16h6.4M8.5 18h7M8.8 20h6.4M9.5 22h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        <path d="M10.4 7.2h3.2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+                        <path d="M10.1 8.1c.95 1 1.85 1 2.8 0M10.1 9.7c.95 1 1.85 1 2.8 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                      </>
+                    ) : (
+                      <>
+                        <circle cx="12" cy="9.5" r="8.5" fill="#fbbf24" opacity="0.16" />
+                        <path d="M12 .7v1.9M3.8 3.8l1.4 1.4M.7 12h1.9M3.8 20.2l1.4-1.4M20.2 3.8l-1.4 1.4M21.3 12h-1.9M20.2 20.2l-1.4-1.4" stroke="#fbbf24" strokeWidth="1.3" strokeLinecap="round" />
+                        <path d="M12 2.2c3.2 0 5.3 2.6 5.3 5.2 0 2.2-1.1 3.7-1.9 4.9-.7 1-1.4 1.8-1.4 3h-4c0-1.2-.7-2-1.4-3-.8-1.2-1.9-2.7-1.9-4.9 0-2.6 2.1-5.2 5.3-5.2Z" stroke="#fbbf24" strokeWidth="1.4" strokeLinejoin="round" />
+                        <ellipse cx="12" cy="7.6" rx="3.9" ry="3.5" fill="#fde68a" opacity="0.55" />
+                        <path d="M8.8 16h6.4M8.5 18h7M8.8 20h6.4M9.5 22h5" stroke="#fbbf24" strokeWidth="1.4" strokeLinecap="round" />
+                        <path d="M10.1 8.1c.95 1 1.85 1 2.8 0M10.1 9.7c.95 1 1.85 1 2.8 0" stroke="#f59e0b" strokeWidth="1.7" strokeLinecap="round" />
+                      </>
+                    )}
+                  </svg>
+                  {resolved === 'dark' ? '关灯' : '开灯'}
+                </button>
+              )}
+              <div className="flex items-center gap-3 ml-auto">
+                {/* 桌面端：开关灯。仅黑白两态：初始按当前实际背景显示“开灯/关灯”，点击黑白互切，无自动模式 */}
+                {isDesktop === true && (
+                  <button
+                    className="flex items-center gap-1.5 text-sm text-muted hover:text-content transition-colors"
+                    title={resolved === 'dark' ? '当前为深色背景，点击切换为浅色' : '当前为浅色背景，点击切换为深色'}
+                    onClick={() => setTheme(resolved === 'dark' ? 'light' : 'dark')}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {resolved === 'dark' ? (
+                      <>
+                        <path d="M12 2.2c3.2 0 5.3 2.6 5.3 5.2 0 2.2-1.1 3.7-1.9 4.9-.7 1-1.4 1.8-1.4 3h-4c0-1.2-.7-2-1.4-3-.8-1.2-1.9-2.7-1.9-4.9 0-2.6 2.1-5.2 5.3-5.2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                        <path d="M8.7 6.1c.5-1.3 1.4-2.1 2.4-2.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity="0.75" />
+                        <path d="M8.8 16h6.4M8.5 18h7M8.8 20h6.4M9.5 22h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        <path d="M10.4 7.2h3.2" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
+                        <path d="M10.1 8.1c.95 1 1.85 1 2.8 0M10.1 9.7c.95 1 1.85 1 2.8 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                      </>
+                    ) : (
+                      <>
+                        <circle cx="12" cy="9.5" r="8.5" fill="#fbbf24" opacity="0.16" />
+                        <path d="M12 .7v1.9M3.8 3.8l1.4 1.4M.7 12h1.9M3.8 20.2l1.4-1.4M20.2 3.8l-1.4 1.4M21.3 12h-1.9M20.2 20.2l-1.4-1.4" stroke="#fbbf24" strokeWidth="1.3" strokeLinecap="round" />
+                        <path d="M12 2.2c3.2 0 5.3 2.6 5.3 5.2 0 2.2-1.1 3.7-1.9 4.9-.7 1-1.4 1.8-1.4 3h-4c0-1.2-.7-2-1.4-3-.8-1.2-1.9-2.7-1.9-4.9 0-2.6 2.1-5.2 5.3-5.2Z" stroke="#fbbf24" strokeWidth="1.4" strokeLinejoin="round" />
+                        <ellipse cx="12" cy="7.6" rx="3.9" ry="3.5" fill="#fde68a" opacity="0.55" />
+                        <path d="M8.8 16h6.4M8.5 18h7M8.8 20h6.4M9.5 22h5" stroke="#fbbf24" strokeWidth="1.4" strokeLinecap="round" />
+                        <path d="M10.1 8.1c.95 1 1.85 1 2.8 0M10.1 9.7c.95 1 1.85 1 2.8 0" stroke="#f59e0b" strokeWidth="1.7" strokeLinecap="round" />
+                      </>
+                    )}
+                    </svg>
+                    {resolved === 'dark' ? '关灯' : '开灯'}
+                  </button>
+                )}
+                <label className="flex items-center gap-1.5 text-sm text-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[#2563eb]"
+                    checked={store.autoplayNext}
+                    onChange={(e) => store.updateSettings({ autoplayNext: e.target.checked })}
+                  />
+                  自动连播
+                </label>
+              </div>
             </div>
           </div>
 
@@ -315,7 +381,7 @@ function WatchContent() {
               {/* 排列开关紧贴它所作用的列表：放在这里才看得出它管的是这一栏的顺序 */}
               {episodes.length > 1 && (
                 <button
-                  className="btn-ghost btn-sm shrink-0"
+                  className="btn-ghost !px-3 !py-1.5 text-sm shrink-0"
                   onClick={() => setReversed((v) => !v)}
                   aria-label={reversed ? '切换为正序排列' : '切换为倒序排列'}
                   title="调整剧集列表的排列顺序"
@@ -377,7 +443,7 @@ function EpisodeButton({ index, active, onClick }: { index: number; active: bool
   return (
     <button
       ref={ref}
-      className={cn('btn btn-sm !px-1', active ? 'episode-active' : 'btn-ghost')}
+      className={cn('btn !px-1 !py-1.5 text-sm', active ? 'episode-active' : 'btn-ghost')}
       onClick={onClick}
     >
       {index + 1}

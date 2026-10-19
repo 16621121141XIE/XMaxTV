@@ -31,21 +31,25 @@ import { useAuth } from './auth';
 import { api } from '@/lib/client-api';
 import { syncSourceSubscription } from '@/lib/subscription-sync';
 import { describeParseStats } from '@/lib/tvbox-parser';
+import { useIsDesktop } from '@/lib/use-platform';
+import { CommercialModeSection, KeyManageSection, WhitelistSection } from './admin-panel';
+import { ADMIN_PHONE } from '@/lib/keys-shared';
 
 /**
  * 设置抽屉：顶部两级导航。
- * - 一级按性质分组：源管理 / 偏好设置 / 数据；
+ * - 一级按性质分组：源管理 / 偏好设置 / 数据 / 管理员；
  * - 二级为该分组下的具体面板，每次只渲染一类内容，避免源很多时长距离滚动。
  * 选中位置记忆到 localStorage，再次打开回到上次所在面板。
  */
 
-type PrimaryTab = 'sources' | 'prefs' | 'data';
-type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'background' | 'io';
+type PrimaryTab = 'sources' | 'prefs' | 'data' | 'admin';
+type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'background' | 'io' | 'biz' | 'keys' | 'wl';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
   { id: 'sources', label: '源管理', icon: 'link' },
   { id: 'prefs', label: '偏好设置', icon: 'gear' },
   { id: 'data', label: '数据', icon: 'download' },
+  { id: 'admin', label: '管理员', icon: 'bolt' },
 ];
 
 const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> = {
@@ -61,6 +65,11 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
     { id: 'background', label: '自定义背景' },
   ],
   data: [{ id: 'io', label: '配置导入导出' }],
+  admin: [
+    { id: 'biz', label: '商业模式' },
+    { id: 'keys', label: '密钥管理' },
+    { id: 'wl', label: '白名单管理' },
+  ],
 };
 
 const TAB_STORAGE_KEY = 'XMaxTV-settings-tab';
@@ -75,11 +84,15 @@ export function SourceManagerDrawer({
   /** 打开时直达指定面板（如偏好设置/自定义背景） */
   initialTab?: { primary: PrimaryTab; secondary: SecondaryTab };
 }) {
+  const isDesktop = useIsDesktop();
+  const { account } = useAuth();
+  const isAdmin = account?.phone === ADMIN_PHONE;
   const [primary, setPrimary] = useState<PrimaryTab>('sources');
   const [secondary, setSecondary] = useState<Record<PrimaryTab, SecondaryTab>>({
     sources: 'vod',
     prefs: 'playback',
     data: 'io',
+    admin: 'biz',
   });
 
   // 打开时若指定了目标面板则优先直达（不覆盖用户上次记忆的 tab 状态之外的位置）
@@ -125,22 +138,33 @@ export function SourceManagerDrawer({
     }
   }, [primary, secondary]);
 
-  const current = secondary[primary];
+  // 「管理员」为一级模块，仅管理员手机号登录可见；非管理员记忆/直达落在 admin 时回退到源管理
+  const effectivePrimary: PrimaryTab = !isAdmin && primary === 'admin' ? 'sources' : primary;
+  const current = secondary[effectivePrimary];
+
+  // 网页端（非 Electron）隐藏「直播源」面板：二级导航过滤 + 若记忆/直达落在 live 则回退到点播源
+  // （=== false 判定：SSR 未判定阶段保持完整列表，桌面端打开设置不出现 tab 闪烁）
+  const visibleTabs = SECONDARY_TABS[effectivePrimary].filter(
+    (t) => !(isDesktop === false && effectivePrimary === 'sources' && t.id === 'live')
+  );
+  // 管理员一级模块仅在管理员登录时展示
+  const visiblePrimary = isAdmin ? PRIMARY_TABS : PRIMARY_TABS.filter((t) => t.id !== 'admin');
+  const effectiveCurrent = isDesktop === false && current === 'live' ? 'vod' : current;
 
   return (
     <Drawer
       open={open}
       onClose={onClose}
       title="设置"
-      resetScrollKey={current}
+      resetScrollKey={effectiveCurrent}
       subheader={
         <div className="space-y-2">
-          <TabRow tabs={PRIMARY_TABS} value={primary} onChange={setPrimary} variant="primary" ariaLabel="设置分类" />
+          <TabRow tabs={visiblePrimary} value={effectivePrimary} onChange={setPrimary} variant="primary" ariaLabel="设置分类" />
           {/* 分组下只有一项时无需二级导航，直接展示该面板 */}
-          {SECONDARY_TABS[primary].length > 1 && (
+          {visibleTabs.length > 1 && (
             <TabRow
-              tabs={SECONDARY_TABS[primary]}
-              value={current}
+              tabs={visibleTabs}
+              value={effectiveCurrent}
               onChange={(id) => setSecondary((prev) => ({ ...prev, [primary]: id }))}
               variant="secondary"
               ariaLabel="设置项"
@@ -149,14 +173,17 @@ export function SourceManagerDrawer({
         </div>
       }
     >
-      {current === 'vod' && <VodSourcesPanel />}
-      {current === 'live' && <LiveSourceManager />}
-      {current === 'playback' && <PlaybackPanel />}
-      {current === 'image' && <ImagePanel />}
-      {current === 'home' && <HomePanel />}
-      {current === 'background' && <BackgroundPanel />}
-      {current === 'subs' && <SourceSubscriptions />}
-      {current === 'io' && <ConfigIoPanel />}
+      {effectiveCurrent === 'vod' && <VodSourcesPanel />}
+      {effectiveCurrent === 'live' && <LiveSourceManager />}
+      {effectiveCurrent === 'playback' && <PlaybackPanel />}
+      {effectiveCurrent === 'image' && <ImagePanel />}
+      {effectiveCurrent === 'home' && <HomePanel />}
+      {effectiveCurrent === 'background' && <BackgroundPanel />}
+      {effectiveCurrent === 'biz' && <CommercialModeSection />}
+      {effectiveCurrent === 'keys' && <KeyManageSection />}
+      {effectiveCurrent === 'wl' && <WhitelistSection />}
+      {effectiveCurrent === 'subs' && <SourceSubscriptions />}
+      {effectiveCurrent === 'io' && <ConfigIoPanel />}
     </Drawer>
   );
 }
