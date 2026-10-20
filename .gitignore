@@ -4,6 +4,12 @@ node_modules/
 .npm-cache/
 *.log
 
+# 环境密钥与本地账号数据（不入库，部署时在平台后台配环境变量）
+.env
+.env.local
+.env.*.local
+data/
+
 # Electron 桌面运行时（部署不需要）
 *.exe
 *.dll
