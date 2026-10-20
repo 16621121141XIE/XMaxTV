@@ -1,0 +1,11 @@
+# Render Blueprint —— 免费 Web Service，固定子域 <name>.onrender.com
+# Render 会自动注入 PORT，本项目 start 脚本读取 ${PORT:-8080}，无需在此声明。
+services:
+  - type: web
+    name: xmaxtv
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
