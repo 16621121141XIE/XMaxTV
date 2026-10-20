@@ -30,6 +30,8 @@ interface AuthConteXMaxTValue {
   commercialMode: boolean;
   openLogin: () => void;
   logout: () => Promise<void>;
+  /** 重新拉取 /api/status，刷新登录态、账号、商业模式开关（管理员切换开关后即时生效） */
+  refreshStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthConteXMaxTValue>({
@@ -41,6 +43,7 @@ const AuthContext = createContext<AuthConteXMaxTValue>({
   commercialMode: false,
   openLogin: () => {},
   logout: async () => {},
+  refreshStatus: async () => {},
 });
 
 export function useAuth(): AuthConteXMaxTValue {
@@ -57,6 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [modalOpen, setModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // 用 ref 跟踪商业模式开关，供全局 401/503 回调读取最新值（回调仅注册一次）
+  const commercialModeRef = useRef(false);
+  useEffect(() => {
+    commercialModeRef.current = commercialMode;
+  }, [commercialMode]);
 
   // 与 Providers 共用同一 query key 与缓存，避免 /api/status 被请求两次
   useEffect(() => {
@@ -95,12 +103,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const setup = (event as CustomEvent).detail === 'setup';
         setSetupRequired(setup);
         setVerified(false);
-        setModalOpen(true);
+        // 商业模式关闭（游客模式）：公开内容已由服务端放行，个别账号接口的 401 不强制弹登录框
+        if (commercialModeRef.current) setModalOpen(true);
       }),
     []
   );
 
   const openLogin = useCallback(() => setModalOpen(true), []);
+
+  // 重新拉取 /api/status：管理员切换商业模式开关后，全局即时更新（游客入口显隐、登录态）
+  const refreshStatus = useCallback(async () => {
+    try {
+      const s = await queryClient.fetchQuery<AuthStatusResponse>({
+        queryKey: STATUS_QUERY_KEY,
+        queryFn: () => api.status(),
+        staleTime: 0,
+      });
+      setVerified(s.verified);
+      setSetupRequired(!s.passwordRequired);
+      setVersion(s.version);
+      setAccount(s.account ?? { loggedIn: false });
+      setCommercialMode(s.commercialMode);
+    } catch {
+      /* 刷新失败不阻塞 */
+    }
+  }, [queryClient]);
 
   const logout = useCallback(async () => {
     try {
@@ -154,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ checked, verified, setupRequired, version, account, commercialMode, openLogin, logout }}
+      value={{ checked, verified, setupRequired, version, account, commercialMode, openLogin, logout, refreshStatus }}
     >
       {children}
       {modalOpen && (
@@ -196,35 +223,37 @@ function LoginModal({
     if (account.loggedIn && !account.activated) return 'activate';
     return 'login';
   });
+  const { toast } = useToast();
   const { logout } = useAuth();
+  // 已登录且授权正常（已激活、未过期）：点账号按钮只看账号信息，可直接关闭继续使用，不强制重新登录
+  const healthy = !!account.loggedIn && !!account.activated && !account.expired;
+  // 可关闭弹框：健康账号、或商业模式关闭（游客/非强制场景）；强制登录态点遮罩/取消不关闭
+  const canDismiss = healthy || !commercialMode;
+  const closeIfAllowed = () => {
+    if (canDismiss) onClose();
+  };
+  // 登录成功后切到对应步骤（激活/付款/关闭），再交给 onSuccess 刷新全局状态
+  const navigate = async (target: 'none' | 'activate' | 'pay') => {
+    setStep(target === 'none' ? 'login' : target);
+    await onSuccess(target);
+  };
 
   return (
     <div
       className="fixed inset-0 z-[95] flex items-center justify-center bg-black/80 animate-fade-in"
       role="dialog"
       aria-modal="true"
+      onClick={() => {
+        if (canDismiss) onClose();
+      }}
     >
       <div
         className="bg-surface-raised rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl"
         role="dialog"
         aria-modal="true"
-        aria-label={step === 'pay' ? '授权续期' : step === 'activate' ? '激活授权' : '账号登录'}
+        aria-label={step === 'pay' ? '授权续期' : step === 'activate' ? '激活授权' : healthy ? '账号信息' : '账号登录'}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* 已登录：显示当前账号，支持退出并切换账号 */}
-        {account.loggedIn && (
-          <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-md bg-hover/60 border border-line text-xs text-muted">
-            <span>当前账号：{maskPhone(account.phone)}</span>
-            <button
-              type="button"
-              className="text-accent hover:underline shrink-0 ml-2"
-              onClick={() => {
-                void logout();
-              }}
-            >
-              退出并切换账号
-            </button>
-          </div>
-        )}
         {setupRequired ? (
           <>
             <h2 className="text-lg font-semibold text-content mb-3">需要配置授权码</h2>
@@ -233,15 +262,95 @@ function LoginModal({
               请联系管理员配置后重启服务。
             </p>
           </>
+        ) : healthy && step === 'login' ? (
+          <AccountPanel
+            account={account}
+            onClose={onClose}
+            onLogout={() => void logout()}
+            onGoActivate={() => setStep('activate')}
+            onGoPay={() => setStep('pay')}
+          />
         ) : step === 'login' ? (
-          <LoginForm commercialMode={commercialMode} onClose={onClose} onNext={onSuccess} onGoActivate={() => setStep('activate')} />
+          <LoginForm commercialMode={commercialMode} onClose={onClose} onNext={navigate} onGoActivate={() => setStep('activate')} />
         ) : step === 'activate' ? (
-          <ActivateForm onSuccess={onSuccess} onBack={() => setStep('login')} onGoPay={() => setStep('pay')} />
+          <ActivateForm onSuccess={onSuccess} onBack={() => setStep('login')} onGoPay={() => setStep('pay')} onClose={closeIfAllowed} />
         ) : (
-          <PayForm onSuccess={onSuccess} onBack={() => setStep('activate')} />
+          <PayForm onSuccess={onSuccess} onBack={() => setStep('activate')} onClose={closeIfAllowed} />
         )}
       </div>
     </div>
+  );
+}
+
+/** 已登录且授权正常：账号信息卡片，可直接关闭继续使用，或续费/激活/退出切换 */
+function AccountPanel({
+  account,
+  onClose,
+  onLogout,
+  onGoActivate,
+  onGoPay,
+}: {
+  account: AccountStatus;
+  onClose: () => void;
+  onLogout: () => void;
+  onGoActivate: () => void;
+  onGoPay: () => void;
+}) {
+  const { commercialMode } = useAuth();
+  // 商业模式关闭（前期免费阶段）：所有用户都不显示充值/激活入口，剩余时间统一显示"当前免费阶段"；
+  // 仅商业模式开启后，普通用户才展示充值续费 / 推广码激活（管理员、白名单永久免费仍隐藏）。
+  const showBilling = commercialMode && !(account.whitelisted || account.unrestricted);
+  return (
+    <>
+      <h2 className="text-lg font-semibold text-content mb-3">当前账号</h2>
+      <div className="px-3 py-3 rounded-md bg-hover/60 border border-line mb-4">
+        <div className="flex items-center justify-between text-sm text-content">
+          <span>手机号</span>
+          <span className="font-medium">{maskPhone(account.phone)}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm text-muted mt-2">
+          <span>会员状态</span>
+          <span className="text-accent font-medium">
+            {!commercialMode
+              ? '当前免费阶段'
+              : typeof account.remainingDays === 'number'
+                ? account.remainingDays >= 9999
+                  ? '永久'
+                  : `${account.remainingDays} 天`
+                : '—'}
+          </span>
+        </div>
+      </div>
+      <button type="button" className="btn-primary w-full mb-2" onClick={onClose}>
+        继续使用当前账号
+      </button>
+      {/* 仅商业模式开启时，普通用户显示充值续费 / 推广码激活；管理员、白名单及免费阶段均隐藏 */}
+      {showBilling && (
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <button
+            type="button"
+            className="py-2 rounded-md border border-line text-sm text-content hover:bg-hover transition-colors"
+            onClick={onGoPay}
+          >
+            充值续费
+          </button>
+          <button
+            type="button"
+            className="py-2 rounded-md border border-line text-sm text-content hover:bg-hover transition-colors"
+            onClick={onGoActivate}
+          >
+            推广码激活
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        className="w-full py-2 rounded-md border border-line text-sm text-muted hover:bg-hover transition-colors"
+        onClick={onLogout}
+      >
+        退出并切换账号
+      </button>
+    </>
   );
 }
 
@@ -262,6 +371,7 @@ function LoginForm({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const phoneRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     phoneRef.current?.focus();
@@ -286,6 +396,7 @@ function LoginForm({
         /* 忽略 */
       }
       await api.accountLogin(mode, phone.trim(), password);
+      toast(mode === 'register' ? '注册成功，已自动登录' : '登录成功', 'success');
       // 登录成功：查询授权状态决定下一步（商业模式关闭时直接进入，不校验）
       const s = await api.status();
       const acc = s.account ?? { loggedIn: false };
@@ -379,10 +490,12 @@ function ActivateForm({
   onSuccess,
   onBack,
   onGoPay,
+  onClose,
 }: {
   onSuccess: (keepOpen: 'none' | 'activate' | 'pay') => Promise<void>;
   onBack: () => void;
   onGoPay: () => void;
+  onClose: () => void;
 }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -441,6 +554,9 @@ function ActivateForm({
           直接付费续期
         </button>
       </div>
+      <button type="button" className="w-full mt-3 text-center text-sm text-muted hover:text-content" onClick={onClose}>
+        取消，关闭窗口
+      </button>
     </>
   );
 }
@@ -448,9 +564,11 @@ function ActivateForm({
 function PayForm({
   onSuccess,
   onBack,
+  onClose,
 }: {
   onSuccess: (keepOpen: 'none' | 'activate' | 'pay') => Promise<void>;
   onBack: () => void;
+  onClose: () => void;
 }) {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -474,10 +592,11 @@ function PayForm({
     setLoading(true);
     setError('');
     try {
-      await api.licenseRenew();
+      // 付款仅提交申请，由管理员在「充值确认」中核对后手动 +30 天
+      await api.submitTopup();
       await onSuccess('none');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '续期失败');
+      setError(err instanceof Error ? err.message : '提交失败');
       setLoading(false);
     }
   };
@@ -485,7 +604,7 @@ function PayForm({
   return (
     <>
       <h2 className="text-lg font-semibold text-content mb-1">授权已到期，请续期</h2>
-      <p className="text-sm text-muted mb-3">输入激活码免费续期，或扫码付款后自动增加 30 天</p>
+      <p className="text-sm text-muted mb-3">输入激活码免费续期，或扫码付款后提交申请，由管理员确认后增加 30 天</p>
 
       {/* 动态激活码（密钥生成器验证，等同一次付款成功） */}
       <div className="mb-4">
@@ -536,13 +655,16 @@ function PayForm({
       </div>
       {error && <p className="mb-2 text-sm text-danger">{error}</p>}
       <button type="button" className="btn-primary w-full" onClick={confirmPaid} disabled={loading}>
-        {loading ? '处理中...' : '我已付款，续期 30 天'}
+        {loading ? '提交中...' : '我已付款，提交申请（待管理员确认）'}
       </button>
       <div className="flex justify-between mt-3 text-sm">
         <button type="button" className="text-muted hover:text-content" onClick={onBack}>
           返回输入授权码
         </button>
       </div>
+      <button type="button" className="w-full mt-3 text-center text-sm text-muted hover:text-content" onClick={onClose}>
+        取消，关闭窗口
+      </button>
     </>
   );
 }

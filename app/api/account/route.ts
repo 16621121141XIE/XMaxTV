@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
 function loginAndSetCookie(req: Request, phone: string, password: string) {
   const r = loginAccount(phone, password);
-  if (!r.success) return NextResponse.json(r, { status: 401 });
+  if (!r.success) return NextResponse.json(r, { status: 400 });
 
   const { token, expiresAt } = signSession(phone);
   const secure = process.env.COOKIE_SECURE === 'true'

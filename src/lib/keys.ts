@@ -37,7 +37,8 @@ export interface KeyRecord {
 
 function loadKeys(): Record<string, KeyRecord[]> {
   try {
-    return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf-8')) as Record<string, KeyRecord[]>;
+    const raw = fs.readFileSync(KEYS_FILE, 'utf-8').replace(/^\uFEFF/, '');
+    return JSON.parse(raw) as Record<string, KeyRecord[]>;
   } catch {
     return {};
   }

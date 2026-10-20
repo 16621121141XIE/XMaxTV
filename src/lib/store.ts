@@ -303,7 +303,7 @@ export const useAppStore = create<AppState>()(
       incognito: false,
       adFilter: true,
       doubanEnabled: true,
-      recommendSource: 'hot-list',
+      recommendSource: 'douban',
       recommendSourceTouched: false,
       autoplayNext: true,
       videoEnhance: false,

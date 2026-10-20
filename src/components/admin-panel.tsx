@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/client-api';
+import { useAuth } from './auth';
 import { useToast } from './toast';
 import { SectionTitle, Switch } from './settings-shared';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -22,6 +23,7 @@ const fmtTime = (ts: number) => {
 /** 商业模式开关（仅管理员可见） */
 export function CommercialModeSection() {
   const { toast } = useToast();
+  const { refreshStatus } = useAuth();
   const [commercialMode, setCommercialMode] = useState(false);
 
   useEffect(() => {
@@ -39,7 +41,9 @@ export function CommercialModeSection() {
       const r = await api.adminSettingsSetCommercial(next);
       if (r.success && r.settings) {
         setCommercialMode(r.settings.commercialMode);
-        toast(r.settings.commercialMode ? '商业模式已开启（校验 30 天剩余时间）' : '商业模式已关闭（免费使用，游客可直接观看）', 'success');
+        // 即时同步全局商业模式开关：隐藏/显示游客入口，无需刷新页面
+        await refreshStatus();
+        toast(r.settings.commercialMode ? '商业模式已开启（开始消耗账户余额）' : '商业模式已关闭（免费使用，游客可直接观看）', 'success');
       } else {
         toast('设置失败', 'error');
         setCommercialMode(!next);
@@ -174,6 +178,112 @@ export function KeyManageSection() {
             >
               {k.status === 'used' ? '已使用' : '未使用'}
             </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+interface TopupItem {
+  id: string;
+  phone: string;
+  createdAt: number;
+  status: 'pending' | 'confirmed' | 'rejected';
+  confirmedAt?: number;
+  days: number;
+}
+
+/** 充值确认（仅管理员可见）：用户提交付款申请后，管理员核对确认再 +30 天 */
+export function TopupSection() {
+  const { toast } = useToast();
+  const [items, setItems] = useState<TopupItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const r = await api.adminTopups();
+      if (r.success && r.topups) setItems(r.topups);
+    } catch {
+      /* 权限或网络异常保持现状 */
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const act = async (id: string, action: 'confirm' | 'reject') => {
+    setLoading(true);
+    try {
+      const r = action === 'confirm' ? await api.adminTopupConfirm(id) : await api.adminTopupReject(id);
+      if (r.success) {
+        await refresh();
+        toast(action === 'confirm' ? '已确认，+30 天' : '已拒绝该申请', 'success');
+      } else {
+        toast(r.error || '操作失败', 'error');
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '操作失败', 'error');
+    }
+    setLoading(false);
+  };
+
+  const pending = items.filter((i) => i.status === 'pending');
+
+  return (
+    <section>
+      <SectionTitle title="充值确认" />
+      <p className="text-xs text-muted mb-3">
+        用户扫码付款后提交申请，核对收款无误后点「确认」给该手机号 +{items[0]?.days ?? 30} 天；误付点「拒绝」
+      </p>
+      <div className="space-y-1.5">
+        {items.length === 0 && <p className="text-xs text-muted">暂无充值申请</p>}
+        {pending.length > 0 && (
+          <p className="text-xs text-accent">待确认 {pending.length} 条</p>
+        )}
+        {items.map((t) => (
+          <div
+            key={t.id}
+            className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface-raised/60 border border-line text-sm"
+          >
+            <div className="min-w-0">
+              <div className="font-mono text-sm text-content">{t.phone}</div>
+              <div className="text-xs text-muted">
+                申请于 {fmtTime(t.createdAt)}
+                {t.confirmedAt ? ` · 确认于 ${fmtTime(t.confirmedAt)}` : ''}
+              </div>
+            </div>
+            {t.status === 'pending' ? (
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="text-xs px-2 py-1 rounded bg-success/10 text-success hover:bg-success/20"
+                  onClick={() => act(t.id, 'confirm')}
+                  disabled={loading}
+                >
+                  确认 +{t.days}天
+                </button>
+                <button
+                  type="button"
+                  className="text-xs px-2 py-1 rounded bg-danger/10 text-danger hover:bg-danger/20"
+                  onClick={() => act(t.id, 'reject')}
+                  disabled={loading}
+                >
+                  拒绝
+                </button>
+              </div>
+            ) : (
+              <span
+                className={
+                  t.status === 'confirmed'
+                    ? 'shrink-0 text-xs px-2 py-0.5 rounded-full bg-success/10 text-success'
+                    : 'shrink-0 text-xs px-2 py-0.5 rounded-full bg-muted/10 text-muted'
+                }
+              >
+                {t.status === 'confirmed' ? '已确认' : '已拒绝'}
+              </span>
+            )}
           </div>
         ))}
       </div>

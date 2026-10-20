@@ -8,9 +8,78 @@ import { cn } from '@/lib/utils';
 import type { DoubanItem } from '@/lib/types';
 import { DoubanCard } from './video-card';
 
-const MOVIE_TAGS = ['热门', '最新', '经典', '豆瓣高分', '冷门佳片', '华语', '欧美', '韩国', '日本', '动画'];
-const TV_TAGS = ['热门', '美剧', '英剧', '韩剧', '日剧', '国产剧', '港剧', '日本动画', '综艺', '纪录片'];
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+/**
+ * 主页一级模块：电影 / 剧集 / 动漫 / 儿童。
+ * 二级标签（sub）可自带 type 覆盖模块默认 type：豆瓣 tv 接口词表很窄，
+ * 国漫（剑来、斗破苍穹这类 3D 番剧）只能从 movie/国产动画 取，故动漫模块混合 tv 日番 + movie 国漫。
+ */
+type Sub = { label: string; type?: 'movie' | 'tv'; tag: string };
+type ModuleId = 'movie' | 'tv' | 'anime' | 'kids';
+type Module = {
+  id: ModuleId;
+  label: string;
+  doubanType: 'movie' | 'tv';
+  subs: Sub[];
+};
+const MODULES: Module[] = [
+  {
+    id: 'movie',
+    label: '电影',
+    doubanType: 'movie',
+    subs: [
+      { label: '热门', tag: '热门' },
+      { label: '最新', tag: '最新' },
+      { label: '经典', tag: '经典' },
+      { label: '豆瓣高分', tag: '豆瓣高分' },
+      { label: '冷门佳片', tag: '冷门佳片' },
+      { label: '华语', tag: '华语' },
+      { label: '欧美', tag: '欧美' },
+      { label: '韩国', tag: '韩国' },
+      { label: '日本', tag: '日本' },
+      { label: '动画电影', type: 'movie', tag: '动画' },
+    ],
+  },
+  {
+    id: 'tv',
+    label: '剧集',
+    doubanType: 'tv',
+    subs: [
+      { label: '热门', tag: '热门' },
+      { label: '美剧', tag: '美剧' },
+      { label: '英剧', tag: '英剧' },
+      { label: '韩剧', tag: '韩剧' },
+      { label: '日剧', tag: '日剧' },
+      { label: '国产剧', tag: '国产剧' },
+      { label: '港剧', tag: '港剧' },
+      { label: '综艺', tag: '综艺' },
+      { label: '纪录片', tag: '纪录片' },
+    ],
+  },
+  {
+    id: 'anime',
+    label: '动漫',
+    doubanType: 'tv',
+    subs: [
+      { label: '日本动画', type: 'tv', tag: '日本动画' },
+      { label: '国产动画', type: 'movie', tag: '国产动画' },
+      { label: '动画电影', type: 'movie', tag: '动画' },
+    ],
+  },
+  {
+    id: 'kids',
+    label: '儿童',
+    doubanType: 'movie',
+    subs: [
+      { label: '动画', type: 'movie', tag: '动画' },
+      { label: '家庭', tag: '家庭' },
+      { label: '儿童', tag: '儿童' },
+      { label: '温情', tag: '温情' },
+      { label: '治愈', tag: '治愈' },
+    ],
+  },
+];
 
 /** 首页推荐区：数据源由设置决定（豆瓣热门 / Bangumi 新番放送 / 影视热榜），二选一展示 */
 export function RecommendSection({ onPick }: { onPick: (title: string) => void }) {
@@ -29,52 +98,59 @@ export function RecommendSection({ onPick }: { onPick: (title: string) => void }
  * 视口外的图不会请求，因此不需要「加载更多」这类本地切片分页来打断浏览。
  */
 function DoubanView({ onPick }: { onPick: (title: string) => void }) {
-  const [type, setType] = useState<'movie' | 'tv'>('movie');
-  const [tag, setTag] = useState('热门');
+  const [mod, setMod] = useState<ModuleId>('movie');
+  const active = MODULES.find((m) => m.id === mod) ?? MODULES[0];
 
+  // 当前二级标签（可自带 type 覆盖模块默认 type）
+  const [sub, setSub] = useState<Sub>(MODULES[0].subs[0]);
+
+  const queryType = sub.type ?? active.doubanType;
   const query = useQuery({
-    queryKey: ['douban', type, tag],
-    queryFn: ({ signal }) => api.douban(type, tag, 0, 50, signal),
+    queryKey: ['douban', active.id, queryType, sub.tag],
+    queryFn: ({ signal }) => api.douban(queryType, sub.tag, 0, 50, signal),
   });
 
-  const tags = type === 'movie' ? MOVIE_TAGS : TV_TAGS;
   const items = query.data?.items ?? [];
 
-  const switchType = (t: 'movie' | 'tv') => {
-    if (t === type) return;
-    setType(t);
-    setTag('热门');
+  const switchMod = (id: ModuleId) => {
+    if (id === mod) return;
+    const m = MODULES.find((x) => x.id === id);
+    setMod(id);
+    setSub(m?.subs[0] ?? MODULES[0].subs[0]);
   };
+
+  const switchSub = (s: Sub) => setSub(s);
 
   return (
     <section aria-label="影视推荐">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="flex bg-chip rounded-lg p-0.5">
-            <TypeButton active={type === 'movie'} onClick={() => switchType('movie')}>
-              电影
+        <div className="flex flex-wrap gap-1.5 bg-chip rounded-lg p-1">
+          {MODULES.map((m) => (
+            <TypeButton key={m.id} active={mod === m.id} onClick={() => switchMod(m.id)}>
+              {m.label}
             </TypeButton>
-            <TypeButton active={type === 'tv'} onClick={() => switchType('tv')}>
-              剧集
-            </TypeButton>
-          </div>
+          ))}
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {tags.map((t) => (
-          <button
-            key={t}
-            className={cn(
-              'px-3.5 py-1.5 rounded-full text-sm transition-colors',
-              t === tag ? 'bg-accent text-on-accent' : 'bg-chip text-muted hover:text-content hover:bg-hover'
-            )}
-            onClick={() => setTag(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      {active.subs.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {active.subs.map((s) => (
+            <button
+              key={s.label}
+              className={cn(
+                'px-3.5 py-1.5 rounded-full text-sm transition-colors',
+                s.label === sub.label && s.tag === sub.tag
+                  ? 'bg-accent text-on-accent'
+                  : 'bg-chip text-muted hover:text-content hover:bg-hover'
+              )}
+              onClick={() => switchSub(s)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {query.isError ? (
         <p className="text-center text-sm text-faint py-8">推荐内容加载失败，可稍后重试或在设置中关闭</p>

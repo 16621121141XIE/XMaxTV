@@ -16,7 +16,8 @@ const WHITELIST_FILE = path.join(dataDir(), 'whitelist.json');
 
 export function loadWhitelist(): string[] {
   try {
-    const data = JSON.parse(fs.readFileSync(WHITELIST_FILE, 'utf-8'));
+    const raw = fs.readFileSync(WHITELIST_FILE, 'utf-8').replace(/^\uFEFF/, '');
+    const data = JSON.parse(raw);
     return Array.isArray(data) ? data.map(String) : [];
   } catch {
     return [];

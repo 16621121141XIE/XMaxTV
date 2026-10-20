@@ -102,6 +102,10 @@ export interface AccountStatus {
   remainingDays?: number;
   /** 授权到期时间戳（ms） */
   expiresAt?: number;
+  /** 白名单用户（永久免费） */
+  whitelisted?: boolean;
+  /** 免校验/不限期（管理员等），不显示续费入口 */
+  unrestricted?: boolean;
 }
 
 export interface AuthStatusResponse {

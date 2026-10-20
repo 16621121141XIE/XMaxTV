@@ -23,7 +23,8 @@ const DEFAULT_SETTINGS: AppSettings = { commercialMode: false };
 
 export function getSettings(): AppSettings {
   try {
-    const data = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) as Partial<AppSettings>;
+    const raw = fs.readFileSync(SETTINGS_FILE, 'utf-8').replace(/^\uFEFF/, '');
+    const data = JSON.parse(raw) as Partial<AppSettings>;
     return { commercialMode: typeof data.commercialMode === 'boolean' ? data.commercialMode : false };
   } catch {
     return { ...DEFAULT_SETTINGS };

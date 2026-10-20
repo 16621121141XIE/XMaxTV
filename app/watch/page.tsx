@@ -50,7 +50,9 @@ function WatchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const store = useAppStore();
-  const { verified } = useAuth();
+  const { verified, commercialMode } = useAuth();
+  // 商业模式关闭（游客模式）：不要求旧推广密码验证（verified）即可进入；开启商业模式才校验 verified
+  const authorized = verified || !commercialMode;
   const { resolved, setTheme } = useTheme();
   const isDesktop = useIsDesktop();
 
@@ -72,7 +74,7 @@ function WatchContent() {
   const detailQuery = useQuery({
     queryKey: ['detail', sourceKey, vodId, source?.url],
     queryFn: ({ signal }) => api.detail(vodId, source!, signal),
-    enabled: Boolean(source && vodId && verified),
+    enabled: Boolean(source && vodId && authorized),
     staleTime: 5 * 60_000,
   });
 
@@ -115,7 +117,7 @@ function WatchContent() {
 
   // 写入观看历史（进入页面即记录，进度后续增量更新）
   useEffect(() => {
-    if (!verified || !sourceKey || !currentUrl) return;
+    if (!authorized || !sourceKey || !currentUrl) return;
     const timer = setTimeout(() => {
       upsertHistory({
         sourceKey,
@@ -132,7 +134,7 @@ function WatchContent() {
     }, 2000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verified, sourceKey, vodId, currentIndex, videoTitle, currentUrl]);
+  }, [authorized, sourceKey, vodId, currentIndex, videoTitle, currentUrl]);
 
   // 播放中与暂停时的进度落盘逻辑一致，共用同一回调
   const handleProgress = useCallback(
@@ -176,7 +178,7 @@ function WatchContent() {
 
   const orderedEpisodes = reversed ? [...episodes].map((_, i) => episodes.length - 1 - i) : episodes.map((_, i) => i);
 
-  if (!verified) {
+  if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-faint text-sm">等待访问验证...</p>
@@ -325,7 +327,7 @@ function WatchContent() {
                       </>
                     )}
                   </svg>
-                  {resolved === 'dark' ? '关灯' : '开灯'}
+                  {resolved === 'dark' ? '开灯' : '关灯'}
                 </button>
               )}
               <div className="flex items-center gap-3 ml-auto">

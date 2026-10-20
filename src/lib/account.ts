@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'node:crypto';
-import { consumeKey } from './keys';
+import { consumeKey, isAdmin } from './keys';
 import { isWhitelisted, WHITELIST_DAYS } from './whitelist';
 import { getSettings } from './settings';
 
@@ -35,7 +35,8 @@ export interface Account {
 
 function loadAccounts(): Record<string, Account> {
   try {
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8')) as Record<string, Account>;
+    const raw = fs.readFileSync(USERS_FILE, 'utf-8').replace(/^\uFEFF/, '');
+    return JSON.parse(raw) as Record<string, Account>;
   } catch {
     return {};
   }
@@ -110,8 +111,20 @@ export function activateByCode(phone: string, code: string) {
 export function renewAccount(phone: string) {
   const accounts = loadAccounts();
   const acc = accounts[phone];
-  if (!acc) return { success: false, error: '账号不存在' };
+  if (!acc) return { success: false, error: '账号不存在，请先注册登录' };
   acc.expiresAt = Math.max(Date.now(), acc.expiresAt) + LICENSE_DAYS * DAY_MS;
+  acc.activated = true;
+  saveAccounts(accounts);
+  return { success: true, expiresAt: acc.expiresAt };
+}
+
+/** 管理员确认充值：给指定手机号 +days 天（账号不存在则提示先注册） */
+export function extendAccountByPhone(phone: string, days: number = LICENSE_DAYS) {
+  const accounts = loadAccounts();
+  const acc = accounts[phone];
+  if (!acc) return { success: false, error: '该手机号未注册，请先注册登录' };
+  acc.expiresAt = Math.max(Date.now(), acc.expiresAt) + days * DAY_MS;
+  acc.activated = true;
   saveAccounts(accounts);
   return { success: true, expiresAt: acc.expiresAt };
 }
@@ -127,15 +140,26 @@ export function accountStatus(phone: string) {
       whitelisted: true,
     };
   }
-  // 商业模式关闭（默认）：前期永久免费，不校验剩余时间
+  // 管理员账号：免激活、不限期（用于管理密钥/白名单/商业模式开关）
+  if (isAdmin(phone)) {
+    return {
+      activated: true,
+      expired: false,
+      remainingDays: WHITELIST_DAYS,
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      whitelisted: false,
+      unrestricted: true,
+    };
+  }
+  // 商业模式关闭（默认）：前期永久免费、不扣减剩余时间；前端统一显示"当前免费阶段"，不展示天数与付费入口。
   if (!getSettings().commercialMode) {
     return {
       activated: true,
       expired: false,
-      remainingDays: 30,
+      remainingDays: 0,
       expiresAt: 0,
       whitelisted: false,
-      unrestricted: true,
+      unrestricted: false,
     };
   }
   const accounts = loadAccounts();

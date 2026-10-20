@@ -32,7 +32,7 @@ import { api } from '@/lib/client-api';
 import { syncSourceSubscription } from '@/lib/subscription-sync';
 import { describeParseStats } from '@/lib/tvbox-parser';
 import { useIsDesktop } from '@/lib/use-platform';
-import { CommercialModeSection, KeyManageSection, WhitelistSection } from './admin-panel';
+import { CommercialModeSection, KeyManageSection, WhitelistSection, TopupSection } from './admin-panel';
 import { ADMIN_PHONE } from '@/lib/keys-shared';
 
 /**
@@ -43,7 +43,7 @@ import { ADMIN_PHONE } from '@/lib/keys-shared';
  */
 
 type PrimaryTab = 'sources' | 'prefs' | 'data' | 'admin';
-type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'background' | 'io' | 'biz' | 'keys' | 'wl';
+type SecondaryTab = 'vod' | 'live' | 'subs' | 'playback' | 'image' | 'home' | 'background' | 'io' | 'biz' | 'keys' | 'wl' | 'topup';
 
 const PRIMARY_TABS: { id: PrimaryTab; label: string; icon: IconName }[] = [
   { id: 'sources', label: '源管理', icon: 'link' },
@@ -67,6 +67,7 @@ const SECONDARY_TABS: Record<PrimaryTab, { id: SecondaryTab; label: string }[]> 
   data: [{ id: 'io', label: '配置导入导出' }],
   admin: [
     { id: 'biz', label: '商业模式' },
+    { id: 'topup', label: '充值确认' },
     { id: 'keys', label: '密钥管理' },
     { id: 'wl', label: '白名单管理' },
   ],
@@ -180,6 +181,7 @@ export function SourceManagerDrawer({
       {effectiveCurrent === 'home' && <HomePanel />}
       {effectiveCurrent === 'background' && <BackgroundPanel />}
       {effectiveCurrent === 'biz' && <CommercialModeSection />}
+      {effectiveCurrent === 'topup' && <TopupSection />}
       {effectiveCurrent === 'keys' && <KeyManageSection />}
       {effectiveCurrent === 'wl' && <WhitelistSection />}
       {effectiveCurrent === 'subs' && <SourceSubscriptions />}

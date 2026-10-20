@@ -50,7 +50,8 @@ function LiveContent() {
   const liveFavorites = useAppStore((s) => s.liveFavorites);
   const imageProxyMode = useAppStore((s) => s.imageProxyMode);
   const customImageProxy = useAppStore((s) => s.customImageProxy);
-  const { verified } = useAuth();
+  const { verified, commercialMode } = useAuth();
+  const authorized = verified || !commercialMode;
   const [copied, setCopied] = useState(false);
   // 移动端频道抽屉开合
   const [listOpen, setListOpen] = useState(false);
@@ -75,7 +76,7 @@ function LiveContent() {
       const results = await Promise.allSettled(sources.map((s) => api.livePlaylist(s.url)));
       return sources.map((source, i) => ({ source, result: results[i] }));
     },
-    enabled: verified && sources.length > 0,
+    enabled: authorized && sources.length > 0,
     staleTime: 10 * 60_000,
   });
 
@@ -226,7 +227,7 @@ function LiveContent() {
     );
   }
 
-  if (!verified) {
+  if (!authorized) {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />

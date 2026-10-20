@@ -196,6 +196,37 @@ export const api = {
       body: JSON.stringify({ action: 'set-commercial', commercialMode: enabled }),
     }),
 
+  /** 用户提交付款申请（等待管理员确认，不直接加天数） */
+  submitTopup: () =>
+    request<{ success: boolean; message?: string; error?: string }>('/api/topup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'request' }),
+    }),
+
+  /** 管理员：充值确认列表 */
+  adminTopups: () =>
+    request<{
+      success: boolean;
+      topups?: { id: string; phone: string; createdAt: number; status: 'pending' | 'confirmed' | 'rejected'; confirmedAt?: number; days: number }[];
+    }>('/api/admin/topups'),
+
+  /** 管理员：确认充值（+30 天） */
+  adminTopupConfirm: (id: string) =>
+    request<{ success: boolean; error?: string; topups?: unknown[] }>('/api/admin/topups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'confirm', id }),
+    }),
+
+  /** 管理员：拒绝充值 */
+  adminTopupReject: (id: string) =>
+    request<{ success: boolean; error?: string; topups?: unknown[] }>('/api/admin/topups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reject', id }),
+    }),
+
   logout: () => request<{ success: boolean }>('/api/auth', { method: 'DELETE' }),
 
   /**
