@@ -34,3 +34,8 @@ install.bat
 uninstall.bat
 create-shortcut.ps1
 start-XMaxTV.bat
+
+# Electron 运行时残留（Web/云部署不需要；本地文件保留供桌面打包）
+icudtl.dat
+LICENSES.chromium.html
+resources/
